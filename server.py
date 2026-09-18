@@ -23,9 +23,9 @@ from BinaryOptionsToolsV2 import PocketOptionAsync
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=2000)
+db = client[os.environ.get('DB_NAME', 'neuralx')]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 AI_MODEL = ("openai", "gpt-5.4")
@@ -967,12 +967,15 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def _startup():
-    configs = await db.po_config.find({"ssid": {"$exists": True}}).to_list(1000)
-    for cfg in configs:
-        user_id = cfg["_id"]
-        sess = get_session(user_id)
-        if not sess.get("engine_task"):
-            sess["engine_task"] = asyncio.create_task(engine_loop(user_id))
+    try:
+        configs = await db.po_config.find({"ssid": {"$exists": True}}).to_list(1000)
+        for cfg in configs:
+            user_id = cfg["_id"]
+            sess = get_session(user_id)
+            if not sess.get("engine_task"):
+                sess["engine_task"] = asyncio.create_task(engine_loop(user_id))
+    except Exception as e:
+        logger.warning(f"Startup DB load skipped (database not reachable): {e}")
 
 
 @app.on_event("shutdown")
