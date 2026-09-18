@@ -70,7 +70,7 @@ mongo_url = os.environ.get('MONGO_URL', '').strip()
 client = None
 db = None
 
-if mongo_url and "USER:PASS" not in mongo_url and "cluster.mongodb.net" not in mongo_url:
+if mongo_url and "cluster.mongodb.net" in mongo_url:
     try:
         client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=2000)
         db = client[os.environ.get('DB_NAME', 'neuralx')]
