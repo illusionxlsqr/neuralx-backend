@@ -18,7 +18,13 @@ try:
     from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 except ImportError:
     LlmChat = None
-from BinaryOptionsToolsV2 import PocketOptionAsync
+try:
+    from BinaryOptionsToolsV2 import PocketOptionAsync
+    po_import_error = None
+except Exception as e:
+    import traceback
+    PocketOptionAsync = None
+    po_import_error = f"{e}\n{traceback.format_exc()}"
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -40,6 +46,17 @@ async def health():
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+@app.get("/debug")
+async def debug():
+    import sys
+    return {
+        "status": "ok",
+        "python": sys.version,
+        "po_imported": PocketOptionAsync is not None,
+        "po_error": po_import_error,
+        "port": os.environ.get("PORT"),
+    }
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -132,6 +149,11 @@ async def connect_client(user_id, ssid: str):
         PO["status"] = "connecting"
         PO["error"] = ""
         demo, uid = parse_ssid(ssid)
+        if PocketOptionAsync is None:
+            PO["status"] = "error"
+            PO["error"] = f"Errore caricamento libreria PocketOptionAsync: {po_import_error}"
+            add_reasoning(user_id, "Libreria Pocket Option non disponibile", "SYS", "loss")
+            return False
         try:
             c = PocketOptionAsync(ssid)
             try:
