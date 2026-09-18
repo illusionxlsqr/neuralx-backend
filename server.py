@@ -29,9 +29,56 @@ except Exception as e:
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=2000)
-db = client[os.environ.get('DB_NAME', 'neuralx')]
+class MockCollection:
+    def __init__(self, name=""):
+        self.name = name
+        self._data = {}
+    async def find_one(self, filter_query, *args, **kwargs):
+        if "_id" in filter_query:
+            return self._data.get(filter_query["_id"])
+        return None
+    async def update_one(self, filter_query, update_query, upsert=False, *args, **kwargs):
+        key = filter_query.get("_id")
+        if not key:
+            return None
+        doc = self._data.setdefault(key, {"_id": key})
+        if "$set" in update_query:
+            doc.update(update_query["$set"])
+        if "$unset" in update_query:
+            for k in update_query["$unset"]:
+                doc.pop(k, None)
+        return None
+    async def insert_one(self, doc, *args, **kwargs):
+        return None
+    def find(self, *args, **kwargs):
+        class Cursor:
+            async def to_list(self, length=1000):
+                return []
+            def sort(self, *args, **kwargs):
+                return self
+        return Cursor()
+
+class MockDB:
+    def __init__(self):
+        self.po_config = MockCollection("po_config")
+        self.po_trades = MockCollection("po_trades")
+        self.chat_messages = MockCollection("chat_messages")
+    def __getitem__(self, name):
+        return getattr(self, name, MockCollection(name))
+
+mongo_url = os.environ.get('MONGO_URL', '').strip()
+client = None
+db = None
+
+if mongo_url and "USER:PASS" not in mongo_url and "cluster.mongodb.net" not in mongo_url:
+    try:
+        client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=2000)
+        db = client[os.environ.get('DB_NAME', 'neuralx')]
+    except Exception as e:
+        client = None
+        db = MockDB()
+else:
+    db = MockDB()
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 AI_MODEL = ("openai", "gpt-5.4")
@@ -1010,7 +1057,8 @@ async def _startup():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    if client:
+        client.close()
 
 
 if __name__ == "__main__":
