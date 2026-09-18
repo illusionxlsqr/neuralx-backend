@@ -33,6 +33,14 @@ AI_MODEL = ("openai", "gpt-5.4")
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+@app.get("/")
+async def health():
+    return {"status": "ok", "service": "NEURAL-X"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -981,4 +989,10 @@ async def _startup():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("server:app", host="0.0.0.0", port=port)
 
